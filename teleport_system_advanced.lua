@@ -620,7 +620,141 @@ function TeleportSystem:setupDragFunctionality(titleBar, mainFrame)
         end)
     end
 end
-
+function TeleportSystem:teleportToDelivery(statusLabel)
+    local deliveryBox = self:findDeliveryBox()
+    if not deliveryBox then
+        self:updateStatus(statusLabel, "Error: Delivery box not found", Color3.fromRGB(255, 80, 80))
+        return
+    end
+    
+    if not self:validateCharacter() then
+        self:updateStatus(statusLabel, "Error: Character not found", Color3.fromRGB(255, 80, 80))
+        return
+    end
+    
+    local targetCFrame = deliveryBox.CFrame * CFrame.new(0, -3, 0)
+    local startPosition = self.humanoidRootPart.Position
+    local totalDistance = (startPosition - targetCFrame.Position).Magnitude
+    
+    self:updateStatus(statusLabel, "Initiating delivery teleport...", Color3.fromRGB(255, 255, 100))
+    
+    local ping = Player:GetNetworkPing() * 1000
+    local baseIterations = math.clamp(math.floor(ping * 0.9), 45, 200)
+    local voidFrequency = math.clamp(math.floor(ping * 0.05), 3, 12)
+    local iterationDelay = math.clamp(ping * 0.0006, 0.002, 0.012)
+    
+    if totalDistance > 100 then
+        local chunks = math.ceil(totalDistance / 90)
+        local iterationsPerChunk = math.floor(baseIterations / chunks)
+        
+        for chunk = 1, chunks do
+            if not self:validateCharacter() then
+                self:updateStatus(statusLabel, "Error: Character lost during chunk teleport", Color3.fromRGB(255, 80, 80))
+                return
+            end
+            
+            local chunkProgress = chunk / chunks
+            local chunkTarget = startPosition:Lerp(targetCFrame.Position, chunkProgress)
+            local chunkCFrame = CFrame.new(chunkTarget, targetCFrame.LookVector)
+            
+            for iteration = 1, iterationsPerChunk do
+                if not self:validateCharacter() then
+                    self:updateStatus(statusLabel, "Error: Character validation failed", Color3.fromRGB(255, 80, 80))
+                    return
+                end
+                
+                local iterationJitter = Vector3.new(
+                    self.random:NextNumber(-0.0004, 0.0004),
+                    self.random:NextNumber(-0.0004, 0.0004),
+                    self.random:NextNumber(-0.0004, 0.0004)
+                )
+                
+                self.humanoidRootPart.CFrame = chunkCFrame + iterationJitter
+                
+                if iteration % voidFrequency == 0 then
+                    self.humanoidRootPart.CFrame = self.voidPosition
+                    RunService.Heartbeat:Wait()
+                    RunService.Heartbeat:Wait()
+                    
+                    if not self:validateCharacter() then
+                        self:updateStatus(statusLabel, "Error: Character lost in void", Color3.fromRGB(255, 80, 80))
+                        return
+                    end
+                    
+                    self.humanoidRootPart.CFrame = chunkCFrame + iterationJitter
+                end
+                
+                RunService.Heartbeat:Wait()
+                self:safeWait(iterationDelay)
+            end
+            
+            self:safeWait(iterationDelay * 3)
+        end
+    else
+        for iteration = 1, baseIterations do
+            if not self:validateCharacter() then
+                self:updateStatus(statusLabel, "Error: Character validation failed", Color3.fromRGB(255, 80, 80))
+                return
+            end
+            
+            local iterationJitter = Vector3.new(
+                self.random:NextNumber(-0.0004, 0.0004),
+                self.random:NextNumber(-0.0004, 0.0004),
+                self.random:NextNumber(-0.0004, 0.0004)
+            )
+            
+            self.humanoidRootPart.CFrame = targetCFrame + iterationJitter
+            
+            if iteration % voidFrequency == 0 then
+                self.humanoidRootPart.CFrame = self.voidPosition
+                RunService.Heartbeat:Wait()
+                RunService.Heartbeat:Wait()
+                
+                if not self:validateCharacter() then
+                    self:updateStatus(statusLabel, "Error: Character lost in void", Color3.fromRGB(255, 80, 80))
+                    return
+                end
+                
+                self.humanoidRootPart.CFrame = targetCFrame + iterationJitter
+            end
+            
+            RunService.Heartbeat:Wait()
+            self:safeWait(iterationDelay)
+        end
+    end
+    
+    for stabilize = 1, 10 do
+        if not self:validateCharacter() then
+            self:updateStatus(statusLabel, "Error: Stabilization failed", Color3.fromRGB(255, 80, 80))
+            return
+        end
+        
+        self.humanoidRootPart.CFrame = self.voidPosition
+        self:safeWait(iterationDelay * 2)
+        
+        local stabilizeJitter = Vector3.new(
+            self.random:NextNumber(-0.0002, 0.0002),
+            self.random:NextNumber(-0.0002, 0.0002),
+            self.random:NextNumber(-0.0002, 0.0002)
+        )
+        
+        self.humanoidRootPart.CFrame = targetCFrame + stabilizeJitter
+        self:safeWait(iterationDelay * 2)
+    end
+    
+    self:safeWait(0.4)
+    
+    if self:validateCharacter() then
+        local finalDistance = (self.humanoidRootPart.Position - targetCFrame.Position).Magnitude
+        if finalDistance <= 40 then
+            self:updateStatus(statusLabel, "Delivery Teleport Successful!", Color3.fromRGB(0, 255, 100))
+        else
+            self:updateStatus(statusLabel, string.format("Delivery Teleport Failed: Distance %.0f", finalDistance), Color3.fromRGB(255, 80, 80))
+        end
+    else
+        self:updateStatus(statusLabel, "Delivery Teleport Failed: Character error", Color3.fromRGB(255, 80, 80))
+    end
+end
 function TeleportSystem:createButton(parent, text, position)
     local button = Instance.new("TextButton")
     button.Parent = parent
