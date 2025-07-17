@@ -706,10 +706,270 @@ function TeleportSystem:createGui()
     statusLabel.TextTransparency = 1
     statusLabel.Text = ""
     statusLabel.TextWrapped = true
-    
     local infoLabel = Instance.new("TextLabel")
     infoLabel.Name = "InfoLabel"
     infoLabel.Parent = content
     infoLabel.BackgroundTransparency = 1
     infoLabel.Size = UDim2.new(0.9, 0, 0, 25)
-    infoLabel
+    infoLabel.Position = UDim2.new(0.05, 0, 0.85, 0)
+    infoLabel.Font = Enum.Font.Gotham
+    infoLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
+    infoLabel.TextSize = self.isMobile and 9 or 10
+    infoLabel.Text = self.isMobile and "Drag title bar to move â€¢ Tap P to toggle" or "Drag title bar to move â€¢ Press P to toggle"
+    infoLabel.TextWrapped = true
+    
+    self.gui = screenGui
+    self.isActive = true
+    
+    self:setupDragFunctionality(titleBar, mainFrame)
+    self:setupButtonEvents(deliveryButton, baseButton, smoothButton, closeButton, statusLabel)
+    self:animateGuiOpen(mainFrame)
+end
+
+function TeleportSystem:setupDragFunctionality(titleBar, mainFrame)
+    local function startDrag(input)
+        if self.isDragging then return end
+        
+        self.isDragging = true
+        self.dragStart = input.Position
+        self.startPos = mainFrame.Position
+        
+        local function updateDrag(input)
+            if not self.isDragging then return end
+            
+            local delta = input.Position - self.dragStart
+            local newPosition = UDim2.new(
+                self.startPos.X.Scale,
+                self.startPos.X.Offset + delta.X,
+                self.startPos.Y.Scale,
+                self.startPos.Y.Offset + delta.Y
+            )
+            
+            mainFrame.Position = newPosition
+        end
+        
+        local function stopDrag()
+            self.isDragging = false
+            if self.dragConnection then
+                self.dragConnection:Disconnect()
+                self.dragConnection = nil
+            end
+        end
+        
+        self.dragConnection = UserInputService.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                updateDrag(input)
+            end
+        end)
+        
+        if self.isMobile then
+            UserInputService.TouchEnded:Connect(stopDrag)
+        else
+            UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    stopDrag()
+                end
+            end)
+        end
+    end
+    
+    if self.isMobile then
+        titleBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Touch then
+                startDrag(input)
+            end
+        end)
+    else
+        titleBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                startDrag(input)
+            end
+        end)
+    end
+end
+
+function TeleportSystem:createButton(parent, text, position)
+    local button = Instance.new("TextButton")
+    button.Parent = parent
+    button.BackgroundColor3 = Color3.fromRGB(40, 120, 255)
+    button.BorderSizePixel = 0
+    button.Position = position
+    button.Size = UDim2.new(0.9, 0, 0, self.isMobile and 45 or 40)
+    button.Font = Enum.Font.GothamSemibold
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextSize = self.isMobile and 13 or 14
+    button.AutoButtonColor = false
+    
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 10)
+    buttonCorner.Parent = button
+    
+    local buttonStroke = Instance.new("UIStroke")
+    buttonStroke.Parent = button
+    buttonStroke.Color = Color3.fromRGB(20, 80, 200)
+    buttonStroke.Thickness = 1
+    buttonStroke.Transparency = 0.5
+    
+    local buttonGradient = Instance.new("UIGradient")
+    buttonGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 130, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 100, 235))
+    })
+    buttonGradient.Rotation = 90
+    buttonGradient.Parent = button
+    
+    self:addButtonAnimation(button, buttonStroke, buttonGradient)
+    
+    return button
+end
+
+function TeleportSystem:addButtonAnimation(button, stroke, gradient)
+    local originalColors = {
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 130, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 100, 235))
+    }
+    
+    local hoverColors = {
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(70, 150, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 120, 255))
+    }
+    
+    button.MouseEnter:Connect(function()
+        TweenService:Create(stroke, TweenInfo.new(0.2), {
+            Transparency = 0.2
+        }):Play()
+        gradient.Color = ColorSequence.new(hoverColors)
+    end)
+    
+    button.MouseLeave:Connect(function()
+        TweenService:Create(stroke, TweenInfo.new(0.2), {
+            Transparency = 0.5
+        }):Play()
+        gradient.Color = ColorSequence.new(originalColors)
+    end)
+    
+    button.MouseButton1Down:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.1), {
+            Size = UDim2.new(0.9, 0, 0, (self.isMobile and 45 or 40) - 2)
+        }):Play()
+    end)
+    
+    button.MouseButton1Up:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.1), {
+            Size = UDim2.new(0.9, 0, 0, self.isMobile and 45 or 40)
+        }):Play()
+    end)
+end
+
+function TeleportSystem:setupButtonEvents(deliveryButton, baseButton, smoothButton, closeButton, statusLabel)
+    deliveryButton.MouseButton1Click:Connect(function()
+        spawn(function()
+            self:teleportToDelivery(statusLabel)
+        end)
+    end)
+    
+    baseButton.MouseButton1Click:Connect(function()
+        spawn(function()
+            self:teleportToNearestBase(statusLabel)
+        end)
+    end)
+    
+    smoothButton.MouseButton1Click:Connect(function()
+        spawn(function()
+            self:smoothTeleport(statusLabel)
+        end)
+    end)
+    
+    closeButton.MouseButton1Click:Connect(function()
+        TweenService:Create(closeButton, TweenInfo.new(0.1), {
+            BackgroundColor3 = Color3.fromRGB(200, 80, 80)
+        }):Play()
+        wait(0.1)
+        self:destroy()
+    end)
+end
+
+function TeleportSystem:animateGuiOpen(frame)
+    TweenService:Create(self.blurEffect, TweenInfo.new(0.4), {Size = 8}):Play()
+    
+    local targetSize = self.isMobile and UDim2.new(0, 320, 0, 280) or UDim2.new(0, 380, 0, 260)
+    
+    TweenService:Create(frame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = targetSize
+    }):Play()
+    
+    spawn(function()
+        wait(0.2)
+        for i, child in pairs(frame:GetDescendants()) do
+            if child:IsA("TextLabel") or child:IsA("TextButton") then
+                spawn(function()
+                    wait(i * 0.02)
+                    child.TextTransparency = 1
+                    TweenService:Create(child, TweenInfo.new(0.3), {TextTransparency = 0}):Play()
+                end)
+            end
+        end
+    end)
+end
+
+function TeleportSystem:setupInputHandling()
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if input.KeyCode == Enum.KeyCode.P then
+            if self.gui and self.gui.Parent then
+                local mainFrame = self.gui.MainFrame
+                local isVisible = mainFrame.Visible
+                
+                if isVisible then
+                    TweenService:Create(mainFrame, TweenInfo.new(0.3), {
+                        Size = UDim2.new(0, 0, 0, 0)
+                    }):Play()
+                    TweenService:Create(self.blurEffect, TweenInfo.new(0.3), {Size = 0}):Play()
+                    
+                    spawn(function()
+                        wait(0.3)
+                        mainFrame.Visible = false
+                    end)
+                else
+                    mainFrame.Visible = true
+                    self:animateGuiOpen(mainFrame)
+                end
+            end
+        end
+    end)
+end
+
+function TeleportSystem:destroy()
+    self.isActive = false
+    
+    if self.dragConnection then
+        self.dragConnection:Disconnect()
+        self.dragConnection = nil
+    end
+    
+    if self.blurEffect then
+        TweenService:Create(self.blurEffect, TweenInfo.new(0.3), {Size = 0}):Play()
+        Debris:AddItem(self.blurEffect, 0.5)
+    end
+    
+    if self.gui then
+        local mainFrame = self.gui.MainFrame
+        
+        TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Size = UDim2.new(0, 0, 0, 0),
+            Rotation = 45
+        }):Play()
+        
+        for _, child in pairs(mainFrame:GetDescendants()) do
+            if child:IsA("TextLabel") or child:IsA("TextButton") then
+                TweenService:Create(child, TweenInfo.new(0.2), {TextTransparency = 1}):Play()
+            end
+        end
+        
+        Debris:AddItem(self.gui, 0.5)
+    end
+end
+
+local teleportSystem = TeleportSystem.new()
