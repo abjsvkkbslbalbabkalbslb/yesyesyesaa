@@ -891,8 +891,6 @@ function TeleportSystem:setupButtonEvents(deliveryButton, baseButton, smoothButt
 end
 
 function TeleportSystem:animateGuiOpen(frame)
-    TweenService:Create(self.blurEffect, TweenInfo.new(0.4), {Size = 8}):Play()
-    
     local targetSize = self.isMobile and UDim2.new(0, 320, 0, 280) or UDim2.new(0, 380, 0, 260)
     
     TweenService:Create(frame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
@@ -911,65 +909,6 @@ function TeleportSystem:animateGuiOpen(frame)
             end
         end
     end)
-end
-
-function TeleportSystem:setupInputHandling()
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        
-        if input.KeyCode == Enum.KeyCode.P then
-            if self.gui and self.gui.Parent then
-                local mainFrame = self.gui.MainFrame
-                local isVisible = mainFrame.Visible
-                
-                if isVisible then
-                    TweenService:Create(mainFrame, TweenInfo.new(0.3), {
-                        Size = UDim2.new(0, 0, 0, 0)
-                    }):Play()
-                    TweenService:Create(self.blurEffect, TweenInfo.new(0.3), {Size = 0}):Play()
-                    
-                    spawn(function()
-                        wait(0.3)
-                        mainFrame.Visible = false
-                    end)
-                else
-                    mainFrame.Visible = true
-                    self:animateGuiOpen(mainFrame)
-                end
-            end
-        end
-    end)
-end
-
-function TeleportSystem:destroy()
-    self.isActive = false
-    
-    if self.dragConnection then
-        self.dragConnection:Disconnect()
-        self.dragConnection = nil
-    end
-    
-    if self.blurEffect then
-        TweenService:Create(self.blurEffect, TweenInfo.new(0.3), {Size = 0}):Play()
-        Debris:AddItem(self.blurEffect, 0.5)
-    end
-    
-    if self.gui then
-        local mainFrame = self.gui.MainFrame
-        
-        TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-            Size = UDim2.new(0, 0, 0, 0),
-            Rotation = 45
-        }):Play()
-        
-        for _, child in pairs(mainFrame:GetDescendants()) do
-            if child:IsA("TextLabel") or child:IsA("TextButton") then
-                TweenService:Create(child, TweenInfo.new(0.2), {TextTransparency = 1}):Play()
-            end
-        end
-        
-        Debris:AddItem(self.gui, 0.5)
-    end
 end
 
 local teleportSystem = TeleportSystem.new()
