@@ -186,7 +186,153 @@ function TeleportSystem:findDeliveryBox()
     
     return nil
 end
-
+function TeleportSystem:smoothTeleport(statusLabel)
+    local deliveryBox = self:findDeliveryBox()
+    if not deliveryBox then
+        self:updateStatus(statusLabel, "Error: Delivery box not found", Color3.fromRGB(255, 80, 80))
+        return
+    end
+    
+    if not self:validateCharacter() then
+        self:updateStatus(statusLabel, "Error: Character not found", Color3.fromRGB(255, 80, 80))
+        return
+    end
+    
+    local targetCFrame = deliveryBox.CFrame * CFrame.new(0, -2, 0)
+    local startPosition = self.humanoidRootPart.Position
+    local endPosition = targetCFrame.Position
+    local totalDistance = (startPosition - endPosition).Magnitude
+    
+    self:updateStatus(statusLabel, "Executing smooth teleport...", Color3.fromRGB(255, 255, 100))
+    
+    local ping = Player:GetNetworkPing() * 1000
+    local adaptiveDelay = math.clamp(ping * 0.0008, 0.003, 0.015)
+    local microMovements = math.clamp(math.floor(ping * 0.8), 40, 180)
+    
+    if totalDistance > 100 then
+        local segments = math.ceil(totalDistance / 85)
+        local segmentDistance = totalDistance / segments
+        
+        for segment = 1, segments do
+            if not self:validateCharacter() then
+                self:updateStatus(statusLabel, "Error: Character lost during teleport", Color3.fromRGB(255, 80, 80))
+                return
+            end
+            
+            local segmentProgress = segment / segments
+            local segmentStart = startPosition:Lerp(endPosition, (segment - 1) / segments)
+            local segmentEnd = startPosition:Lerp(endPosition, segmentProgress)
+            
+            local segmentSteps = math.floor(microMovements / segments)
+            
+            for step = 1, segmentSteps do
+                if not self:validateCharacter() then
+                    self:updateStatus(statusLabel, "Error: Character validation failed", Color3.fromRGB(255, 80, 80))
+                    return
+                end
+                
+                local stepProgress = step / segmentSteps
+                local smoothStep = stepProgress * stepProgress * (3 - 2 * stepProgress)
+                
+                local currentPosition = segmentStart:Lerp(segmentEnd, smoothStep)
+                
+                local microJitter = Vector3.new(
+                    self.random:NextNumber(-0.0003, 0.0003),
+                    self.random:NextNumber(-0.0003, 0.0003),
+                    self.random:NextNumber(-0.0003, 0.0003)
+                )
+                
+                self.humanoidRootPart.CFrame = CFrame.new(currentPosition + microJitter, targetCFrame.LookVector)
+                
+                if step % 3 == 0 then
+                    self.humanoidRootPart.CFrame = self.voidPosition
+                    RunService.Heartbeat:Wait()
+                    RunService.Heartbeat:Wait()
+                    
+                    if not self:validateCharacter() then
+                        self:updateStatus(statusLabel, "Error: Character lost in void", Color3.fromRGB(255, 80, 80))
+                        return
+                    end
+                    
+                    self.humanoidRootPart.CFrame = CFrame.new(currentPosition + microJitter, targetCFrame.LookVector)
+                end
+                
+                self:safeWait(adaptiveDelay)
+            end
+            
+            self:safeWait(adaptiveDelay * 2)
+        end
+    else
+        local steps = math.floor(microMovements * 0.7)
+        
+        for step = 1, steps do
+            if not self:validateCharacter() then
+                self:updateStatus(statusLabel, "Error: Character validation failed", Color3.fromRGB(255, 80, 80))
+                return
+            end
+            
+            local progress = step / steps
+            local smoothProgress = progress * progress * (3 - 2 * progress)
+            
+            local currentPosition = startPosition:Lerp(endPosition, smoothProgress)
+            
+            local microJitter = Vector3.new(
+                self.random:NextNumber(-0.0003, 0.0003),
+                self.random:NextNumber(-0.0003, 0.0003),
+                self.random:NextNumber(-0.0003, 0.0003)
+            )
+            
+            self.humanoidRootPart.CFrame = CFrame.new(currentPosition + microJitter, targetCFrame.LookVector)
+            
+            if step % 4 == 0 then
+                self.humanoidRootPart.CFrame = self.voidPosition
+                RunService.Heartbeat:Wait()
+                RunService.Heartbeat:Wait()
+                
+                if not self:validateCharacter() then
+                    self:updateStatus(statusLabel, "Error: Character lost in void", Color3.fromRGB(255, 80, 80))
+                    return
+                end
+                
+                self.humanoidRootPart.CFrame = CFrame.new(currentPosition + microJitter, targetCFrame.LookVector)
+            end
+            
+            self:safeWait(adaptiveDelay)
+        end
+    end
+    
+    for finalize = 1, 8 do
+        if not self:validateCharacter() then
+            self:updateStatus(statusLabel, "Error: Finalization failed", Color3.fromRGB(255, 80, 80))
+            return
+        end
+        
+        self.humanoidRootPart.CFrame = self.voidPosition
+        self:safeWait(adaptiveDelay * 1.5)
+        
+        local finalJitter = Vector3.new(
+            self.random:NextNumber(-0.0002, 0.0002),
+            self.random:NextNumber(-0.0002, 0.0002),
+            self.random:NextNumber(-0.0002, 0.0002)
+        )
+        
+        self.humanoidRootPart.CFrame = targetCFrame + finalJitter
+        self:safeWait(adaptiveDelay * 1.5)
+    end
+    
+    self:safeWait(0.3)
+    
+    if self:validateCharacter() then
+        local finalDistance = (self.humanoidRootPart.Position - targetCFrame.Position).Magnitude
+        if finalDistance <= 35 then
+            self:updateStatus(statusLabel, "Smooth Teleport Successful!", Color3.fromRGB(0, 255, 100))
+        else
+            self:updateStatus(statusLabel, string.format("Smooth Teleport Failed: Distance %.0f", finalDistance), Color3.fromRGB(255, 80, 80))
+        end
+    else
+        self:updateStatus(statusLabel, "Smooth Teleport Failed: Character error", Color3.fromRGB(255, 80, 80))
+    end
+end
 function TeleportSystem:findNearestBase()
     local plotsFolder = workspace:FindFirstChild("Plots")
     if not plotsFolder or not self:validateCharacter() then return nil end
@@ -266,16 +412,7 @@ function TeleportSystem:executeAdvancedTeleport(targetCFrame, statusLabel, opera
     end
 end
 
-function TeleportSystem:teleportToDelivery(statusLabel)
-    local deliveryBox = self:findDeliveryBox()
-    if not deliveryBox then
-        self:updateStatus(statusLabel, "Error: Delivery box not found", Color3.fromRGB(255, 80, 80))
-        return
-    end
-    
-    local targetCFrame = deliveryBox.CFrame * CFrame.new(0, -3, 0)
-    self:executeAdvancedTeleport(targetCFrame, statusLabel, "Delivery Teleport")
-end
+
 
 function TeleportSystem:teleportToNearestBase(statusLabel)
     local nearestBase = self:findNearestBase()
@@ -288,76 +425,7 @@ function TeleportSystem:teleportToNearestBase(statusLabel)
     self:executeAdvancedTeleport(targetCFrame, statusLabel, "Base Teleport")
 end
 
-function TeleportSystem:smoothTeleport(statusLabel)
-    local deliveryBox = self:findDeliveryBox()
-    if not deliveryBox then
-        self:updateStatus(statusLabel, "Error: Delivery box not found", Color3.fromRGB(255, 80, 80))
-        return
-    end
-    
-    if not self:validateCharacter() then
-        self:updateStatus(statusLabel, "Error: Character not found", Color3.fromRGB(255, 80, 80))
-        return
-    end
-    
-    local targetCFrame = deliveryBox.CFrame * CFrame.new(0, -2, 0)
-    local startPosition = self.humanoidRootPart.Position
-    local endPosition = targetCFrame.Position
-    local distance = (startPosition - endPosition).Magnitude
-    
-    self:updateStatus(statusLabel, "Executing smooth teleport...", Color3.fromRGB(255, 255, 100))
-    
-    local steps = math.min(math.max(50, math.floor(distance / 20)), 150)
-    local stepDuration = math.max(0.005, 0.5 / steps)
-    
-    for i = 1, steps do
-        if not self:validateCharacter() then
-            self:updateStatus(statusLabel, "Error: Character lost during smooth teleport", Color3.fromRGB(255, 80, 80))
-            return
-        end
-        
-        local progress = i / steps
-        local smoothProgress = progress * progress * (3 - 2 * progress)
-        
-        local newPosition = startPosition:Lerp(endPosition, smoothProgress)
-        local jitter = Vector3.new(
-            self.random:NextNumber(-0.0005, 0.0005),
-            self.random:NextNumber(-0.0005, 0.0005),
-            self.random:NextNumber(-0.0005, 0.0005)
-        )
-        
-        self.humanoidRootPart.CFrame = CFrame.new(newPosition + jitter, targetCFrame.LookVector)
-        
-        self:safeWait(stepDuration)
-    end
-    
-    self:finalizePosition(targetCFrame)
-    
-    self:safeWait(0.5)
-    
-    if self:validateCharacter() then
-        local finalDistance = (self.humanoidRootPart.Position - targetCFrame.Position).Magnitude
-        if finalDistance <= 50 then
-            self:updateStatus(statusLabel, "Smooth Teleport Successful!", Color3.fromRGB(0, 255, 100))
-        else
-            self:updateStatus(statusLabel, string.format("Smooth Teleport Failed: Distance %.0f", finalDistance), Color3.fromRGB(255, 80, 80))
-        end
-    else
-        self:updateStatus(statusLabel, "Smooth Teleport Failed: Character error", Color3.fromRGB(255, 80, 80))
-    end
-end
 
-function TeleportSystem:updateStatus(statusLabel, message, color)
-    statusLabel.Text = message
-    statusLabel.TextColor3 = color
-    
-    TweenService:Create(statusLabel, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
-    
-    spawn(function()
-        wait(2.5)
-        TweenService:Create(statusLabel, TweenInfo.new(0.3), {TextTransparency = 1}):Play()
-    end)
-end
 
 function TeleportSystem:createGui()
     self.blurEffect = Instance.new("BlurEffect")
