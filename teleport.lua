@@ -14,64 +14,11 @@ local TpAmount
 local VoidPosition = CFrame.new(0, -3.4028234663852886e+38, 0)
 local IsTeleporting = false
 local IsDestroyed = false
-local AntiStunEnabled = false
-local OriginalWalkSpeed = 16
-local OriginalJumpPower = 50
 
 local Character, Humanoid, HumanoidRootPart
-local AntiStunConnections = {}
 
 local function GetCharacter()
     return Player.Character or Player.CharacterAdded:Wait()
-end
-
-local function ClearAntiStunConnections()
-    for _, connection in pairs(AntiStunConnections) do
-        if connection then
-            connection:Disconnect()
-        end
-    end
-    AntiStunConnections = {}
-end
-
-local function EnableAntiStun()
-    if not Character or not Humanoid or not HumanoidRootPart then return end
-    
-    ClearAntiStunConnections()
-    
-    OriginalWalkSpeed = Humanoid.WalkSpeed
-    OriginalJumpPower = Humanoid.JumpPower or Humanoid.JumpHeight
-    
-    AntiStunConnections[#AntiStunConnections + 1] = RunService.Heartbeat:Connect(function()
-        if not AntiStunEnabled then return end
-        
-        HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
-        HumanoidRootPart.AngularVelocity = Vector3.new(0, 0, 0)
-        HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-        
-        Humanoid.PlatformStand = false
-        Humanoid.Sit = false
-        
-        if Humanoid.WalkSpeed ~= OriginalWalkSpeed then
-            Humanoid.WalkSpeed = OriginalWalkSpeed
-        end
-        if Humanoid.JumpPower and Humanoid.JumpPower ~= OriginalJumpPower then
-            Humanoid.JumpPower = OriginalJumpPower
-        elseif Humanoid.JumpHeight and Humanoid.JumpHeight ~= OriginalJumpPower then
-            Humanoid.JumpHeight = OriginalJumpPower
-        end
-    end)
-    
-    for _, part in pairs(Character:GetChildren()) do
-        if part:IsA("BasePart") and part ~= HumanoidRootPart then
-            AntiStunConnections[#AntiStunConnections + 1] = part.Touched:Connect(function() end)
-        end
-    end
-end
-
-local function DisableAntiStun()
-    ClearAntiStunConnections()
 end
 
 local function SetupCharacter()
@@ -81,7 +28,6 @@ local function SetupCharacter()
     
     Humanoid.Died:Connect(function()
         if not IsDestroyed then
-            DisableAntiStun()
             Player:LoadCharacter()
         end
     end)
@@ -89,7 +35,6 @@ local function SetupCharacter()
     task.spawn(function()
         while Humanoid and Humanoid.Health > 0 and not IsDestroyed do
             if HumanoidRootPart.Position.Y < -50 then
-                DisableAntiStun()
                 Player:LoadCharacter()
                 break
             end
@@ -112,7 +57,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = Player:WaitForChild("PlayerGui")
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 320, 0, 220)
+MainFrame.Size = UDim2.new(0, 320, 0, 180)
 MainFrame.Position = UDim2.new(0, 50, 0, 50)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.BackgroundTransparency = 0.1
@@ -276,11 +221,10 @@ end
 local SetCurrentButton = CreateButton("Set Current", UDim2.new(0, 15, 0, 90), UDim2.new(0, 140, 0, 30), Color3.fromRGB(60, 60, 60))
 local TeleportButton = CreateButton("Teleport", UDim2.new(0, 165, 0, 90), UDim2.new(0, 140, 0, 30), Color3.fromRGB(70, 130, 250))
 local SmoothTeleportButton = CreateButton("Smooth Teleport", UDim2.new(0, 15, 0, 130), UDim2.new(0, 140, 0, 30), Color3.fromRGB(130, 70, 250))
-local AntiStunButton = CreateButton("AntiStun: OFF", UDim2.new(0, 165, 0, 130), UDim2.new(0, 140, 0, 30), Color3.fromRGB(255, 85, 85))
 
 local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(0, 290, 0, 20)
-StatusLabel.Position = UDim2.new(0, 15, 0, 170)
+StatusLabel.Size = UDim2.new(0, 140, 0, 30)
+StatusLabel.Position = UDim2.new(0, 165, 0, 130)
 StatusLabel.Text = ""
 StatusLabel.BackgroundTransparency = 1
 StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -303,7 +247,7 @@ end
 task.spawn(function()
     while not IsDestroyed do
         local Ping = Player:GetNetworkPing() * 1000
-        TpAmount = math.clamp(math.floor(Ping * 0.5), 8, 120)
+        TpAmount = math.clamp(math.floor(Ping * 0.8), 10, 150)
         RunService.Heartbeat:Wait()
     end
 end)
@@ -313,9 +257,9 @@ local function InstantTeleport(Position)
         IsTeleporting = true
         if typeof(Position) == "CFrame" then
             HumanoidRootPart.CFrame = Position + Vector3.new(
-                Random:NextNumber(-0.001, 0.001),
-                Random:NextNumber(-0.001, 0.001),
-                Random:NextNumber(-0.001, 0.001)
+                Random:NextNumber(-0.0001, 0.0001),
+                Random:NextNumber(-0.0001, 0.0001),
+                Random:NextNumber(-0.0001, 0.0001)
             )
             RunService.Heartbeat:Wait()
             IsTeleporting = false
@@ -327,27 +271,27 @@ local function TeleportToCoordinates(Coordinates)
     if not (Coordinates and #Coordinates == 3) then return false end
     local TargetPosition = Vector3.new(Coordinates[1], Coordinates[2], Coordinates[3])
     local TargetCFrame = CFrame.new(TargetPosition)
-    local StableTime = 2
+    local StableTime = 3
     local StableStart = nil
-    local Timeout = 12
+    local Timeout = 10
     local StartTime = os.clock()
-    
-    AntiStunEnabled = true
-    EnableAntiStun()
 
     while not IsDestroyed do
-        for i = 1, math.floor((TpAmount or 50) / 2) do
+        for i = 1, (TpAmount or 70) do
             InstantTeleport(TargetCFrame)
-            task.wait(0.001)
         end
-        
+        for _ = 1, 2 do
+            InstantTeleport(VoidPosition)
+        end
+        for i = 1, math.floor((TpAmount or 70) / 16) do
+            InstantTeleport(TargetCFrame)
+        end
+
         local Distance = (HumanoidRootPart.Position - TargetPosition).Magnitude
 
-        if Distance <= 25 then
+        if Distance <= 30 then
             if not StableStart then StableStart = os.clock() end
             if os.clock() - StableStart >= StableTime then
-                AntiStunEnabled = false
-                DisableAntiStun()
                 return true
             end
         else
@@ -355,16 +299,11 @@ local function TeleportToCoordinates(Coordinates)
         end
 
         if os.clock() - StartTime > Timeout then
-            AntiStunEnabled = false
-            DisableAntiStun()
             return false
         end
 
-        task.wait(0.08)
+        task.wait(0.1)
     end
-    
-    AntiStunEnabled = false
-    DisableAntiStun()
     return false
 end
 
@@ -375,30 +314,20 @@ local function SmoothTeleportToCoordinates(Coordinates)
     local Distance = (TargetPosition - CurrentPosition).Magnitude
     local Steps = math.ceil(Distance / 50)
     
-    AntiStunEnabled = true
-    EnableAntiStun()
-    
     for i = 1, Steps do
-        if IsDestroyed then 
-            AntiStunEnabled = false
-            DisableAntiStun()
-            return false 
-        end
+        if IsDestroyed then return false end
         local Progress = i / Steps
         local IntermediatePosition = CurrentPosition:lerp(TargetPosition, Progress)
         local IntermediateCFrame = CFrame.new(IntermediatePosition)
         
-        for j = 1, math.floor((TpAmount or 50) / 4) do
+        for j = 1, math.floor((TpAmount or 70) / 4) do
             InstantTeleport(IntermediateCFrame)
         end
         
         task.wait(0.05)
     end
     
-    local Success = TeleportToCoordinates(Coordinates)
-    AntiStunEnabled = false
-    DisableAntiStun()
-    return Success
+    return TeleportToCoordinates(Coordinates)
 end
 
 SetCurrentButton.MouseButton1Click:Connect(function()
@@ -452,28 +381,8 @@ SmoothTeleportButton.MouseButton1Click:Connect(function()
     end
 end)
 
-AntiStunButton.MouseButton1Click:Connect(function()
-    if IsDestroyed then return end
-    
-    if AntiStunEnabled then
-        AntiStunEnabled = false
-        DisableAntiStun()
-        AntiStunButton.Text = "AntiStun: OFF"
-        AntiStunButton.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
-        ShowStatus("AntiStun Disabled", Color3.fromRGB(255, 100, 100))
-    else
-        AntiStunEnabled = true
-        EnableAntiStun()
-        AntiStunButton.Text = "AntiStun: ON"
-        AntiStunButton.BackgroundColor3 = Color3.fromRGB(85, 255, 85)
-        ShowStatus("AntiStun Enabled", Color3.fromRGB(100, 255, 100))
-    end
-end)
-
 CloseButton.MouseButton1Click:Connect(function()
     IsDestroyed = true
-    AntiStunEnabled = false
-    DisableAntiStun()
     if CharacterConnection then
         CharacterConnection:Disconnect()
     end
