@@ -82,7 +82,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -20, 0, 35)
 TitleLabel.Position = UDim2.new(0, 10, 0, 5)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Ash's Teleporter"
+TitleLabel.Text = "Ash's Teleporter || V2"
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 20
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -113,7 +113,7 @@ local function UpdateDrag(Input)
 end
 
 MainFrame.InputBegan:Connect(function(Input)
-    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+    if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
         IsDragging = true
         DragStart = Input.Position
         StartPos = MainFrame.Position
@@ -127,7 +127,7 @@ MainFrame.InputBegan:Connect(function(Input)
 end)
 
 MainFrame.InputChanged:Connect(function(Input)
-    if Input.UserInputType == Enum.UserInputType.MouseMovement then
+    if Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch then
         DragInput = Input
     end
 end)
@@ -135,6 +135,12 @@ end)
 UserInputService.InputChanged:Connect(function(Input)
     if Input == DragInput and IsDragging then
         UpdateDrag(Input)
+    end
+end)
+
+UserInputService.TouchMoved:Connect(function(Touch, GameProcessed)
+    if Touch == DragInput and IsDragging then
+        UpdateDrag(Touch)
     end
 end)
 
@@ -265,25 +271,25 @@ local function TeleportToCoordinates(Coordinates)
     if not (Coordinates and #Coordinates == 3) then return false end
     local TargetPosition = Vector3.new(Coordinates[1], Coordinates[2], Coordinates[3])
     local TargetCFrame = CFrame.new(TargetPosition)
-    local StableTime = 3
+    local StableTime = 1
     local StableStart = nil
-    local Timeout = 10
+    local Timeout = 8
     local StartTime = os.clock()
 
     while not IsDestroyed do
-        for i = 1, (TpAmount or 70) do
+        for i = 1, math.max((TpAmount or 70) * 2, 140) do
             InstantTeleport(TargetCFrame)
         end
-        for _ = 1, 2 do
+        for _ = 1, 3 do
             InstantTeleport(VoidPosition)
         end
-        for i = 1, math.floor((TpAmount or 70) / 16) do
+        for i = 1, math.max(math.floor((TpAmount or 70) / 8), 20) do
             InstantTeleport(TargetCFrame)
         end
 
         local Distance = (HumanoidRootPart.Position - TargetPosition).Magnitude
 
-        if Distance <= 30 then
+        if Distance <= 50 then
             if not StableStart then StableStart = os.clock() end
             if os.clock() - StableStart >= StableTime then
                 return true
@@ -296,7 +302,7 @@ local function TeleportToCoordinates(Coordinates)
             return false
         end
 
-        task.wait(0.1)
+        task.wait(0.05)
     end
     return false
 end
@@ -306,7 +312,7 @@ local function SmoothTeleportToCoordinates(Coordinates)
     local TargetPosition = Vector3.new(Coordinates[1], Coordinates[2], Coordinates[3])
     local CurrentPosition = HumanoidRootPart.Position
     local Distance = (TargetPosition - CurrentPosition).Magnitude
-    local Steps = math.ceil(Distance / 50)
+    local Steps = math.ceil(Distance / 75)
     
     for i = 1, Steps do
         if IsDestroyed then return false end
@@ -314,11 +320,11 @@ local function SmoothTeleportToCoordinates(Coordinates)
         local IntermediatePosition = CurrentPosition:lerp(TargetPosition, Progress)
         local IntermediateCFrame = CFrame.new(IntermediatePosition)
         
-        for j = 1, math.floor((TpAmount or 70) / 4) do
+        for j = 1, math.floor((TpAmount or 70) / 2) do
             InstantTeleport(IntermediateCFrame)
         end
         
-        task.wait(0.05)
+        task.wait(0.02)
     end
     
     return TeleportToCoordinates(Coordinates)
