@@ -17,14 +17,105 @@ local IsDestroyed = false
 
 local Character, Humanoid, HumanoidRootPart
 
+local AntiRagdollEnabled = false
+local AntiTrapEnabled = false
+local SpeedBoostEnabled = false
+
+local RagdollConnection = nil
+local SpeedConnection = nil
+local TrapConnections = {}
+
+local NormalSpeed = 16
+local BoostedSpeed = 35
+
 local function GetCharacter()
     return Player.Character or Player.CharacterAdded:Wait()
+end
+
+local function AnchorCharacter(char, state)
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            part.Anchored = state
+        end
+    end
+end
+
+local function HandleRagdoll(char)
+    local humanoid = char:WaitForChild("Humanoid", 5)
+    if not humanoid then return end
+    
+    if RagdollConnection then
+        RagdollConnection:Disconnect()
+    end
+    
+    RagdollConnection = humanoid.StateChanged:Connect(function(_, newState)
+        if AntiRagdollEnabled and (newState == Enum.HumanoidStateType.Physics or 
+           newState == Enum.HumanoidStateType.Ragdoll or 
+           newState == Enum.HumanoidStateType.FallingDown) then
+            AnchorCharacter(char, true)
+            task.wait(0.01)
+            AnchorCharacter(char, false)
+            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
+    end)
+end
+
+local function EnforceSpeed(humanoid)
+    if SpeedConnection then
+        SpeedConnection:Disconnect()
+    end
+    
+    SpeedConnection = RunService.Heartbeat:Connect(function()
+        if SpeedBoostEnabled and humanoid and humanoid.WalkSpeed ~= BoostedSpeed then
+            humanoid.WalkSpeed = BoostedSpeed
+        end
+    end)
+    
+    humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+        if SpeedBoostEnabled and humanoid.WalkSpeed ~= BoostedSpeed then
+            humanoid.WalkSpeed = BoostedSpeed
+        end
+    end)
+end
+
+local function RemoveTrapTouchInterest()
+    for _, obj in pairs(game:GetDescendants()) do
+        if obj:IsA("TouchTransmitter") and obj.Name == "TouchInterest" then
+            local parent = obj.Parent
+            if parent and parent:IsA("MeshPart") and parent.Name == "Open" then
+                local model = parent:FindFirstAncestorOfClass("Model")
+                if model and model.Name == "Trap" then
+                    obj:Destroy()
+                end
+            end
+        end
+    end
+end
+
+local function HandleTrapSpawn(obj)
+    if AntiTrapEnabled and obj:IsA("TouchTransmitter") and obj.Name == "TouchInterest" then
+        local parent = obj.Parent
+        if parent and parent:IsA("MeshPart") and parent.Name == "Open" then
+            local model = parent:FindFirstAncestorOfClass("Model")
+            if model and model.Name == "Trap" then
+                obj:Destroy()
+            end
+        end
+    end
 end
 
 local function SetupCharacter()
     Character = GetCharacter()
     Humanoid = Character:WaitForChild("Humanoid")
     HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+    
+    if AntiRagdollEnabled then
+        HandleRagdoll(Character)
+    end
+    
+    if SpeedBoostEnabled then
+        EnforceSpeed(Humanoid)
+    end
     
     Humanoid.Died:Connect(function()
         if not IsDestroyed then
@@ -51,13 +142,15 @@ local CharacterConnection = Player.CharacterAdded:Connect(function()
     end
 end)
 
+local TrapConnection = game.DescendantAdded:Connect(HandleTrapSpawn)
+
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "EnhancedTeleportGui"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = Player:WaitForChild("PlayerGui")
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 320, 0, 180)
+MainFrame.Size = UDim2.new(0, 320, 0, 250)
 MainFrame.Position = UDim2.new(0, 50, 0, 50)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.BackgroundTransparency = 0.1
@@ -82,7 +175,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -20, 0, 35)
 TitleLabel.Position = UDim2.new(0, 10, 0, 5)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Ash's Teleporter || V2"
+TitleLabel.Text = "Ash's Teleporter || V3"
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 20
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -218,13 +311,75 @@ local function CreateButton(Text, Position, Size, Color, TextColor)
     return Button
 end
 
+local function CreateToggle(Text, Position, Size, Color, Callback)
+    local Toggle = Instance.new("TextButton")
+    Toggle.Size = Size
+    Toggle.Position = Position
+    Toggle.Text = Text .. ": OFF"
+    Toggle.BackgroundColor3 = Color
+    Toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Toggle.Font = Enum.Font.GothamBold
+    Toggle.TextSize = 12
+    Toggle.Parent = MainFrame
+    
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 8)
+    Corner.Parent = Toggle
+    
+    local ToggleState = false
+    
+    Toggle.MouseButton1Click:Connect(function()
+        ToggleState = not ToggleState
+        Toggle.Text = Text .. ": " .. (ToggleState and "ON" or "OFF")
+        Toggle.BackgroundColor3 = ToggleState and Color3.fromRGB(85, 170, 85) or Color
+        
+        if Callback then
+            Callback(ToggleState)
+        end
+    end)
+    
+    return Toggle
+end
+
 local SetCurrentButton = CreateButton("Set Current", UDim2.new(0, 15, 0, 90), UDim2.new(0, 140, 0, 30), Color3.fromRGB(60, 60, 60))
 local TeleportButton = CreateButton("Teleport", UDim2.new(0, 165, 0, 90), UDim2.new(0, 140, 0, 30), Color3.fromRGB(70, 130, 250))
 local SmoothTeleportButton = CreateButton("Smooth Teleport", UDim2.new(0, 15, 0, 130), UDim2.new(0, 140, 0, 30), Color3.fromRGB(130, 70, 250))
 
+local AntiRagdollToggle = CreateToggle("Anti Ragdoll", UDim2.new(0, 165, 0, 130), UDim2.new(0, 140, 0, 30), Color3.fromRGB(255, 140, 0), function(state)
+    AntiRagdollEnabled = state
+    if state and Character then
+        HandleRagdoll(Character)
+    elseif RagdollConnection then
+        RagdollConnection:Disconnect()
+        RagdollConnection = nil
+    end
+end)
+
+local AntiTrapToggle = CreateToggle("Anti Trap", UDim2.new(0, 15, 0, 170), UDim2.new(0, 140, 0, 30), Color3.fromRGB(255, 85, 85), function(state)
+    AntiTrapEnabled = state
+    if state then
+        RemoveTrapTouchInterest()
+    end
+end)
+
+local SpeedBoostToggle = CreateToggle("Speed Boost", UDim2.new(0, 165, 0, 170), UDim2.new(0, 140, 0, 30), Color3.fromRGB(85, 255, 127), function(state)
+    SpeedBoostEnabled = state
+    if Character and Humanoid then
+        if state then
+            EnforceSpeed(Humanoid)
+        else
+            if SpeedConnection then
+                SpeedConnection:Disconnect()
+                SpeedConnection = nil
+            end
+            Humanoid.WalkSpeed = NormalSpeed
+        end
+    end
+end)
+
 local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(0, 140, 0, 30)
-StatusLabel.Position = UDim2.new(0, 165, 0, 130)
+StatusLabel.Size = UDim2.new(1, -20, 0, 30)
+StatusLabel.Position = UDim2.new(0, 10, 0, 210)
 StatusLabel.Text = ""
 StatusLabel.BackgroundTransparency = 1
 StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -385,6 +540,15 @@ CloseButton.MouseButton1Click:Connect(function()
     IsDestroyed = true
     if CharacterConnection then
         CharacterConnection:Disconnect()
+    end
+    if RagdollConnection then
+        RagdollConnection:Disconnect()
+    end
+    if SpeedConnection then
+        SpeedConnection:Disconnect()
+    end
+    if TrapConnection then
+        TrapConnection:Disconnect()
     end
     ScreenGui:Destroy()
 end)
