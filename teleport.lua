@@ -271,25 +271,25 @@ local function TeleportToCoordinates(Coordinates)
     if not (Coordinates and #Coordinates == 3) then return false end
     local TargetPosition = Vector3.new(Coordinates[1], Coordinates[2], Coordinates[3])
     local TargetCFrame = CFrame.new(TargetPosition)
-    local StableTime = 1
+    local StableTime = 3
     local StableStart = nil
-    local Timeout = 8
+    local Timeout = 10
     local StartTime = os.clock()
 
     while not IsDestroyed do
-        for i = 1, math.max((TpAmount or 70) * 2, 140) do
+        for i = 1, (TpAmount or 70) do
             InstantTeleport(TargetCFrame)
         end
-        for _ = 1, 3 do
+        for _ = 1, 2 do
             InstantTeleport(VoidPosition)
         end
-        for i = 1, math.max(math.floor((TpAmount or 70) / 8), 20) do
+        for i = 1, math.floor((TpAmount or 70) / 16) do
             InstantTeleport(TargetCFrame)
         end
 
         local Distance = (HumanoidRootPart.Position - TargetPosition).Magnitude
 
-        if Distance <= 50 then
+        if Distance <= 30 then
             if not StableStart then StableStart = os.clock() end
             if os.clock() - StableStart >= StableTime then
                 return true
@@ -302,7 +302,7 @@ local function TeleportToCoordinates(Coordinates)
             return false
         end
 
-        task.wait(0.05)
+        task.wait(0.1)
     end
     return false
 end
@@ -312,7 +312,7 @@ local function SmoothTeleportToCoordinates(Coordinates)
     local TargetPosition = Vector3.new(Coordinates[1], Coordinates[2], Coordinates[3])
     local CurrentPosition = HumanoidRootPart.Position
     local Distance = (TargetPosition - CurrentPosition).Magnitude
-    local Steps = math.ceil(Distance / 75)
+    local Steps = math.ceil(Distance / 50)
     
     for i = 1, Steps do
         if IsDestroyed then return false end
@@ -320,11 +320,11 @@ local function SmoothTeleportToCoordinates(Coordinates)
         local IntermediatePosition = CurrentPosition:lerp(TargetPosition, Progress)
         local IntermediateCFrame = CFrame.new(IntermediatePosition)
         
-        for j = 1, math.floor((TpAmount or 70) / 2) do
+        for j = 1, math.floor((TpAmount or 70) / 4) do
             InstantTeleport(IntermediateCFrame)
         end
         
-        task.wait(0.02)
+        task.wait(0.05)
     end
     
     return TeleportToCoordinates(Coordinates)
